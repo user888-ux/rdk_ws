@@ -23,7 +23,7 @@ DetectorController::DetectorController(
 
     // 订阅NV12图像话题
     // 假设发布者为官方硬件节点，编码格式为 "nv12"
-    image_sub_ = create_subscription<hbm_img_msgs::msg::HbmMsg1080P>(
+    image_sub_ = create_subscription<sensor_msgs::msg::Image>(
         "/nv12_img", 10,
         std::bind(&DetectorController::imageCallback, this, std::placeholders::_1));
 
@@ -57,6 +57,7 @@ void DetectorController::imageCallback(const sensor_msgs::msg::Image::SharedPtr 
                               "Only nv12 encoding is supported");
         return;
     }
+
     // 构建cv::Mat，直接引用数据，不拷贝（发布者保证生命周期）
     cv::Mat nv12_img(msg->height * 3 / 2, msg->width, CV_8UC1,
                      const_cast<unsigned char *>(msg->data.data()));
@@ -81,6 +82,34 @@ void DetectorController::imageCallback(const sensor_msgs::msg::Image::SharedPtr 
     LOG("完成回调");
 }
 
+// void DetectorController::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
+// {
+//     cv::Mat nv12_img;
+
+//     if (msg->encoding == "nv12") {
+//         // 直接使用，构造 CV_8UC1 单通道矩阵（高度为 3/2 * height）
+//         nv12_img = cv::Mat(msg->height * 3 / 2, msg->width, CV_8UC1,
+//                            const_cast<unsigned char*>(msg->data.data()));
+//     }
+//     else {
+//         // 将 BGR 消息转为 cv::Mat
+//         cv::Mat bgr(msg->height, msg->width, CV_8UC3,
+//                     const_cast<unsigned char*>(msg->data.data()));
+//         // 调用转换函数（需提前从模型获取 input_h_, input_w_，并决定是否 letterbox）
+//         nv12_img = bgrToNV12(bgr, msg->height * 3 / 2, msg->width, true);
+//     }
+//     // else {
+//     //     RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 1000,
+//     //                           "Unsupported image encoding: %s", msg->encoding.c_str());
+//     //     return;
+//     // }
+
+//     // 深拷贝一份 NV12 数据，防止 ROS 消息内存被释放
+//     cv::Mat nv12_copy = nv12_img.clone();
+//     int image_id = next_image_id_++;
+//     detector_->submitImage(nv12_copy, image_id);
+// }
+
 void DetectorController::processResults()
 {
     // 尝试获取已完成的结果
@@ -91,6 +120,7 @@ void DetectorController::processResults()
 
     while (detector_->getResult(processed_id, bboxes, scores, class_ids)) {
         // 渲染图像
+        LOG("正在渲染图像");
         cv::Mat bgr;
         {
             std::lock_guard<std::mutex> lock(map_mutex_);
@@ -128,17 +158,68 @@ cv::Mat DetectorController::renderImage(
     const std::vector<float> & scores,
     const std::vector<int> & class_ids)
 {
-    cv::Mat img = bgr_image.clone();
-    // 这里仅示例绘制矩形，实际可加入类别名、颜色等
-    for (size_t i = 0; i < bboxes.size(); i++) {
-        cv::rectangle(img, bboxes[i], cv::Scalar(0, 255, 0), 2);
-        std::string text = std::to_string(class_ids[i]) + ": " +
-                           std::to_string(static_cast<int>(scores[i] * 100)) + "%";
-        cv::putText(img, text,
-                    cv::Point(bboxes[i].x, bboxes[i].y - 5),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+    cv::Mat canvas = bgr_image.clone();
+
+    // 类别名称映射（可与检测器内部保持一致）
+    static const std::vector<std::string> class_names = {
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+        "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+        "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
+        "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
+        "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
+        "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+        "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+        "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+        "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier",
+        "toothbrush"
+    };
+
+    // 为每个类别生成固定颜色
+    static std::vector<cv::Scalar> colors;
+    if (colors.empty()) {
+        for (size_t i = 0; i < class_names.size(); ++i) {
+            cv::Scalar color(cv::randu<int>() % 256, cv::randu<int>() % 256, cv::randu<int>() % 256);
+            colors.push_back(color);
+        }
     }
-    return img;
+
+    for (size_t i = 0; i < bboxes.size(); ++i) {
+        const cv::Rect2d& box = bboxes[i];
+        int cls = class_ids[i];
+        cv::Scalar color = (cls < static_cast<int>(colors.size())) ? colors[cls] : cv::Scalar(0, 255, 0);
+
+        // 绘制矩形框
+        cv::rectangle(canvas, cv::Point(box.x, box.y),
+                      cv::Point(box.x + box.width, box.y + box.height),
+                      color, 2);
+
+        // 构造标签文本
+        std::string label;
+        if (cls >= 0 && cls < static_cast<int>(class_names.size())) {
+            label = class_names[cls];
+        } else {
+            label = "cls_" + std::to_string(cls);
+        }
+        label += ": " + std::to_string(static_cast<int>(scores[i] * 100)) + "%";
+
+        // 计算文本背景框大小
+        int baseline = 0;
+        cv::Size text_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+        cv::Point label_origin(box.x, box.y - 5);
+        if (label_origin.y - text_size.height < 0) {
+            label_origin.y = box.y + text_size.height + 5;
+        }
+        cv::rectangle(canvas,
+                      cv::Point(label_origin.x, label_origin.y - text_size.height),
+                      cv::Point(label_origin.x + text_size.width, label_origin.y + baseline),
+                      color, -1);
+        cv::putText(canvas, label, label_origin,
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 1);
+    }
+
+    return canvas;
 }
 
 vision_msgs::msg::Detection2DArray
@@ -148,6 +229,7 @@ DetectorController::generateDetectionMsg(
     const std::vector<float> & scores,
     const std::vector<int> & class_ids)
 {
+    LOG("正在获取结果");
     vision_msgs::msg::Detection2DArray array_msg;
     array_msg.header = header;
     for (size_t i = 0; i < bboxes.size(); i++) {
@@ -163,4 +245,60 @@ DetectorController::generateDetectionMsg(
         array_msg.detections.push_back(det);
     }
     return array_msg;
+}
+
+cv::Mat DetectorController::bgrToNV12(const cv::Mat& bgr_img,
+                                      int target_h,
+                                      int target_w,
+                                      bool use_letterbox)
+{
+    // 1. 预处理：缩放 + 可能的 letterbox
+    cv::Mat resized;
+    float scale = 1.0f;
+    int top = 0, left = 0;   // 偏移量（仅 letterbox 时有意义）
+
+    if (use_letterbox) {
+        // 保持宽高比的 letterbox
+        scale = std::min(static_cast<float>(target_h) / bgr_img.rows,
+                         static_cast<float>(target_w) / bgr_img.cols);
+        int new_w = static_cast<int>(bgr_img.cols * scale);
+        int new_h = static_cast<int>(bgr_img.rows * scale);
+        cv::resize(bgr_img, resized, cv::Size(new_w, new_h));
+
+        top  = (target_h - new_h) / 2;
+        left = (target_w - new_w) / 2;
+        int bottom = target_h - new_h - top;
+        int right  = target_w - new_w - left;
+        cv::copyMakeBorder(resized, resized,
+                           top, bottom, left, right,
+                           cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
+    } else {
+        // 直接缩放到目标尺寸
+        cv::resize(bgr_img, resized, cv::Size(target_w, target_h));
+    }
+
+    // 2. 颜色空间转换：BGR -> YUV_I420
+    cv::Mat yuv_i420;
+    cv::cvtColor(resized, yuv_i420, cv::COLOR_BGR2YUV_I420);
+
+    // 3. 手动打包为 NV12 格式 (Y 平面 + UV 交错平面)
+    cv::Mat nv12(target_h * 3 / 2, target_w, CV_8UC1);
+    uint8_t* p_nv12_y  = nv12.data;
+    uint8_t* p_nv12_uv = p_nv12_y + target_h * target_w;
+
+    const uint8_t* p_y = yuv_i420.data;
+    const uint8_t* p_u = p_y + target_h * target_w;
+    const uint8_t* p_v = p_u + (target_h / 2) * (target_w / 2);
+
+    // 复制 Y 平面
+    std::memcpy(p_nv12_y, p_y, target_h * target_w);
+
+    // 交错复制 UV 平面
+    size_t uv_count = static_cast<size_t>(target_h / 2) * (target_w / 2);
+    for (size_t i = 0; i < uv_count; ++i) {
+        p_nv12_uv[2 * i]     = p_u[i];
+        p_nv12_uv[2 * i + 1] = p_v[i];
+    }
+
+    return nv12;
 }

@@ -60,8 +60,13 @@ private:
 
     std::string get_model_path();
 
+    cv::Mat bgrToNV12(const cv::Mat& bgr_img,
+                                      int target_h,
+                                      int target_w,
+                                      bool use_letterbox);
+
     // ROS 接口
-    rclcpp::Subscription<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
     rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr det_pub_;
     rclcpp::TimerBase::SharedPtr result_timer_;

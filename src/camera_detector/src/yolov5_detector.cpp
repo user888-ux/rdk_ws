@@ -10,6 +10,11 @@ YOLOv5Detector::YOLOv5Detector(const std::string& model_path, int classes_num,
       score_threshold_(score_threshold), nms_threshold_(nms_threshold), nms_top_k_(nms_top_k) {}
 
 bool YOLOv5Detector::init() {
+    //0. 初始化 anchors，通常与模型训练一致
+    small_anchors_  = {{10, 13}, {16, 30}, {33, 23}};
+    medium_anchors_ = {{30, 61}, {62, 45}, {59, 119}};
+    large_anchors_  = {{116, 90}, {156, 198}, {373, 326}};
+
     // 1. 加载模型
     const char* model_file = model_path_.c_str();
     if (hbDNNInitializeFromFiles(&packed_dnn_handle_, &model_file, 1) != 0) {
@@ -66,7 +71,7 @@ YOLOv5Detector::~YOLOv5Detector() {
 void YOLOv5Detector::submitImage(const cv::Mat& nv12_image, int image_id) {
     LOG("成功提交图像到任务队列");
     std::unique_lock<std::mutex> lock(mtx_);
-    inference_queue_.push({nv12_image.clone(), image_id});
+    inference_queue_.push({nv12_image.clone(), image_id,{}});
     cv_infer_.notify_one();
 }
 
@@ -104,33 +109,141 @@ void YOLOv5Detector::inferenceThread() {
         std::unique_lock<std::mutex> lock(mtx_);
         // 注意：这里的output_data是BPU内存指针，实际传递时需要考虑内存生命周期
         // 简化示例中直接将指针存入任务，实际需要更安全的管理方式
-        postprocess_queue_.push({task.image, task.id});
+        postprocess_queue_.push({task.image, task.id,{}});
         cv_post_.notify_one();
     }
 }
 
 void YOLOv5Detector::postprocessThread() {
     while (!stop_) {
-        LOG("开始后处理");
         Task task;
         {
             std::unique_lock<std::mutex> lock(mtx_);
             cv_post_.wait(lock, [this] { return !postprocess_queue_.empty() || stop_; });
             if (stop_ && postprocess_queue_.empty()) break;
-            task = postprocess_queue_.front();
+            task = std::move(postprocess_queue_.front());
             postprocess_queue_.pop();
         }
-        
-        // 执行后处理
-        Result res;
-        // 1. 从output_tensors_中读取数据
-        // 2. 解码边界框
-        // 3. 执行NMS (具体实现可参考原代码)
-        // 这里为占位示例
-        // res.bboxes = ...;
-        
-        std::unique_lock<std::mutex> lock(mtx_);
-        results_[task.id] = res;
+
+        // 准备 feature map 数据指针
+        std::vector<float*> output_ptrs;
+        for (auto& copy : task.output_copies) {
+            output_ptrs.push_back(copy.data());
+        }
+
+        // 解码所有检测框
+        std::vector<std::vector<cv::Rect2d>> bboxes_per_class(classes_num_);
+        std::vector<std::vector<float>> scores_per_class(classes_num_);
+        decodeOutput(output_ptrs, bboxes_per_class, scores_per_class);
+
+        // 执行 NMS
+        std::vector<cv::Rect2d> final_boxes;
+        std::vector<float> final_scores;
+        std::vector<int> final_class_ids;
+        applyNMS(bboxes_per_class, scores_per_class,
+                 final_boxes, final_scores, final_class_ids);
+
+        // 存储结果
+        {
+            std::lock_guard<std::mutex> lock(mtx_);
+            Result res;
+            res.bboxes = final_boxes;
+            res.scores = final_scores;
+            res.class_ids = final_class_ids;
+            results_[task.id] = res;
+        }
+    }
+}
+
+void YOLOv5Detector::decodeOutput(const std::vector<float*>& output_data,
+                                  std::vector<std::vector<cv::Rect2d>>& bboxes,
+                                  std::vector<std::vector<float>>& scores) {
+    // output_data 的顺序已根据 output_order_ 调整，即 output_data[0] 为小特征图，[1] 为中，[2] 为大
+    float conf_thres_raw = -std::log(1.0f / score_threshold_ - 1.0f);
+    std::vector<std::pair<float, float>>* anchor_sets[3] = {
+        &small_anchors_, &medium_anchors_, &large_anchors_
+    };
+    int strides[3] = {8, 16, 32};
+    int feature_h[3], feature_w[3];
+    for (int i = 0; i < 3; ++i) {
+        feature_h[i] = input_h_ / strides[i];
+        feature_w[i] = input_w_ / strides[i];
+    }
+
+    for (int idx = 0; idx < 3; ++idx) {
+        float* raw = output_data[idx];
+        int h = feature_h[idx];
+        int w = feature_w[idx];
+        auto& anchors = *anchor_sets[idx];
+        int stride = strides[idx];
+
+        for (int row = 0; row < h; ++row) {
+            for (int col = 0; col < w; ++col) {
+                for (auto& anchor : anchors) {
+                    float* cur = raw;
+                    raw += (5 + classes_num_);
+
+                    // 置信度过滤
+                    if (cur[4] < conf_thres_raw) continue;
+
+                    // 类别概率及最高类别
+                    int max_cls_id = 5;
+                    float max_cls_val = cur[5];
+                    for (int c = 6; c < 5 + classes_num_; ++c) {
+                        if (cur[c] > max_cls_val) {
+                            max_cls_val = cur[c];
+                            max_cls_id = c;
+                        }
+                    }
+                    float score = 1.0f / (1.0f + std::exp(-cur[4])) *
+                                  1.0f / (1.0f + std::exp(-max_cls_val));
+                    if (score < score_threshold_) continue;
+
+                    int cls_id = max_cls_id - 5;
+
+                    // 解码边界框
+                    float cx = (1.0f / (1.0f + std::exp(-cur[0])) * 2.0f - 0.5f + col) * stride;
+                    float cy = (1.0f / (1.0f + std::exp(-cur[1])) * 2.0f - 0.5f + row) * stride;
+                    float w_box = std::pow(1.0f / (1.0f + std::exp(-cur[2])) * 2.0f, 2) * anchor.first;
+                    float h_box = std::pow(1.0f / (1.0f + std::exp(-cur[3])) * 2.0f, 2) * anchor.second;
+                    float x = cx - w_box / 2.0f;
+                    float y = cy - h_box / 2.0f;
+
+                    bboxes[cls_id].push_back(cv::Rect2d(x, y, w_box, h_box));
+                    scores[cls_id].push_back(score);
+                }
+            }
+        }
+    }
+
+    for (int idx = 0; idx < 3; ++idx) {
+    float* raw = output_data[idx];
+    int h = feature_h[idx];
+    int w = feature_w[idx];
+    auto& anchors = *anchor_sets[idx];
+    int stride = strides[idx];
+    int total_expected = h * w * anchors.size() * (5 + classes_num_);
+    // LOG("idx="<<idx<<" h="<<h<<" w="<<w<<" anchors="<<anchors<<" classes="<<class<<" total_expected="<<total_expected);
+    printf("Layer %d: h=%d w=%d anchors=%zu classes=%d total_expected=%d\n",
+           idx, h, w, anchors.size(), classes_num_, total_expected);
+    // 可选：尝试获取实际模型输出的元素个数（取决于你的 DNN 接口）
+    }
+}
+
+void YOLOv5Detector::applyNMS(std::vector<std::vector<cv::Rect2d>>& bboxes,
+                              std::vector<std::vector<float>>& scores,
+                              std::vector<cv::Rect2d>& final_boxes,
+                              std::vector<float>& final_scores,
+                              std::vector<int>& final_class_ids) {
+    for (int cls = 0; cls < classes_num_; ++cls) {
+        std::vector<int> indices;
+        cv::dnn::NMSBoxes(bboxes[cls], scores[cls], score_threshold_,
+                          nms_threshold_, indices, 1.0f, nms_top_k_);
+        for (int idx : indices) {
+            final_boxes.push_back(bboxes[cls][idx]);
+            final_scores.push_back(scores[cls][idx]);
+            final_class_ids.push_back(cls);
+        }
     }
 }
 

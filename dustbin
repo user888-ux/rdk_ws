@@ -1,0 +1,31 @@
+user-888@user888-Lenovo-G5000-IRX9:~$ nvidia-smi
+Sun Jan 25 20:28:27 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.48.01              Driver Version: 590.48.01      CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4050 ...    Off |   00000000:01:00.0 Off |                  N/A |
+| N/A   40C    P3            590W /   55W |      11MiB /   6141MiB |     15%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1860      G   /usr/lib/xorg/Xorg                        4MiB |
++-----------------------------------------------------------------------------------------+
+user-888@user888-Lenovo-G5000-IRX9:~$ prime-select query
+on-demand
+user-888@user888-Lenovo-G5000-IRX9:~$ sudo prime-select nvidia
+[sudo] user-888 的密码： 
+Info: selecting the nvidia profile
+Deleting /lib/modprobe.d/nvidia-runtimepm.conf
+Updating the initramfs. Please wait for the operation to complete:
+Done
+user-888@user888-Lenovo-G5000-IRX9:~$ prime-select query
+nvidia

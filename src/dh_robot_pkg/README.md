@@ -43,7 +43,7 @@
 >python3 ~/rdk_ws/serial_test.py
 
 <div align="center">
-  <img src="./src/dh_robot_pkg/result.png" width="80%" alt="Inference Result"/>
+  <img src="result.png" width="80%" alt="Inference Result"/>
 </div>
 
 ### 可以看到成功显示yaw和pitch角并收到解算后的角度，经过16进制数转换，最终确认了从缓冲区中得到的数据和打印出来的转换后的角度能一一对应
@@ -66,11 +66,11 @@
 ### 终端1
 > ```bash
 >cd ~/rdk_ws
->colcon build
+>colcon build --packages-select dh_robot_pkg
 >source install/setup.sh
 ### 配置输出的串口为 /dev/ttyS1,配置波特率serial_baudrat
 > ```bash
->ros2 run dh_robot_pkg dh_robot_node --ros-args -p port:=/dev/ttyS1 -p baud:=115200
+>ros2 run dh_robot_pkg dh_robot_node --ros-args -p port:=/dev/ttyS1 -p baud:=500000 -p frame_rate:=10.0
 ### 然后应该能看到初始化信息：
 > ```txt
 >[INFO] [1776682393.593019211] [robot_controller]: Successfully connected to serial port: /dev/ttyS1

@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/src/dh_robot_pkg/include",
                 "${workspaceFolder}/src/camera_detector/include",
-                "/opt/ros/humble/include/**"
+                "/opt/ros/humble/include/**",
+                "/opt/tros/humble/include/ai_msgs"
             ],
             // "browse": {
             //     "path": [

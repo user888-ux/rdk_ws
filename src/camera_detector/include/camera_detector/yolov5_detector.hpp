@@ -74,6 +74,17 @@ private:
      */
     void infer(const cv::Mat& nv12_image, std::vector<float*>& output_data);
 
+    // 后处理中使用的工具函数
+    void decodeOutput(const std::vector<float*>& output_data,
+                      std::vector<std::vector<cv::Rect2d>>& bboxes,
+                      std::vector<std::vector<float>>& scores);
+
+    void applyNMS(std::vector<std::vector<cv::Rect2d>>& bboxes,
+                  std::vector<std::vector<float>>& scores,
+                  std::vector<cv::Rect2d>& final_boxes,
+                  std::vector<float>& final_scores,
+                  std::vector<int>& final_class_ids);
+
     // 模型相关
     hbPackedDNNHandle_t packed_dnn_handle_; ///< 打包模型句柄
     hbDNNHandle_t dnn_handle_;              ///< 单个模型句柄
@@ -100,6 +111,7 @@ private:
     struct Task {
         cv::Mat image; ///< 图像数据（NV12）
         int id;        ///< 帧ID
+        std::vector<std::vector<float>> output_copies;// 拷贝后的特征图数据
     };
     std::queue<Task> inference_queue_;      ///< 待推理的图像队列
     std::queue<Task> postprocess_queue_;    ///< 待后处理的图像队列
@@ -111,4 +123,12 @@ private:
         std::vector<int> class_ids;
     };
     std::map<int, Result> results_;         ///< 已完成后处理的结果，键为帧ID
+
+    // anchors 分组（小、中、大）
+    std::vector<std::pair<float, float>> small_anchors_;
+    std::vector<std::pair<float, float>> medium_anchors_;
+    std::vector<std::pair<float, float>> large_anchors_;
+
+    // 类别名称（可选，如需在检测器内部保存）
+    std::vector<std::string> class_names_;
 };
