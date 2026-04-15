@@ -1,0 +1,119 @@
+<!-- <?xml version="1.0"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! -->
+<robot name="my_drone">
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0.0055704807018409 -0.00244991967294366 -0.0185497134505628" rpy="0 0 0" />
+      <mass value="1.0" /> <!-- 增加质量，防止飞走 -->
+      <inertia ixx="8.55859869395609E-06" ixy="3.13408264257711E-23" ixz="9.67770927651844E-09" iyy="0.01" iyz="-1.02146044068577E-24" izz="0.01" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_drone_description/meshes/base_link.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.1 0.1 0.1" /> <!-- 简化碰撞体 -->
+      </geometry>
+    </collision>
+  </link>
+  
+  <link name="link0">
+    <inertial>
+      <origin xyz="-3.4945E-05 -0.0054999 -1.2889E-05" rpy="0 0 0" />
+      <mass value="0.1" /> <!-- 增加质量 -->
+      <inertia ixx="8.5376E-07" ixy="3.0443E-10" ixz="9.7495E-10" iyy="1.5087E-06" iyz="-4.2265E-10" izz="8.5087E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_drone_description/meshes/link0.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.05 0.05 0.1" /> <!-- 简化碰撞体 -->
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="joint0" type="revolute">
+    <origin xyz="0.022417 0.016751 0.0097501" rpy="-1.5708 0 1.3255" />
+    <parent link="base_link" />
+    <child link="link0" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="10" />
+  </joint>
+  
+  <link name="link1">
+    <inertial>
+      <origin xyz="-3.4954E-05 0.015653 -1.2849E-05" rpy="0 0 0" />
+      <mass value="0.1" /> <!-- 增加质量 -->
+      <inertia ixx="8.5376E-07" ixy="3.0443E-10" ixz="9.7495E-10" iyy="1.5087E-06" iyz="-4.2265E-10" izz="8.5087E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_drone_description/meshes/link1.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.05 0.05 0.1" /> <!-- 简化碰撞体 -->
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="joint1" type="revolute">
+    <origin xyz="0 -0.088 -0.023147" rpy="-1.5708 0 -1.8685" />
+    <parent link="link0" />
+    <child link="link1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="10" />
+  </joint>
+  
+  <link name="link2">
+    <inertial>
+      <origin xyz="-3.4954E-05 -0.0033115 -1.2849E-05" rpy="0 0 0" />
+      <mass value="0.1" /> <!-- 增加质量 -->
+      <inertia ixx="8.5376E-07" ixy="3.0443E-10" ixz="9.7495E-10" iyy="1.5087E-06" iyz="-4.2265E-10" izz="8.5087E-07" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://my_drone_description/meshes/link2.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.05 0.05 0.1" /> <!-- 简化碰撞体 -->
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="joint2" type="revolute">
+    <origin xyz="0 -0.026847 0.040388" rpy="-1.5708 0 -3.0999" />
+    <parent link="link1" />
+    <child link="link2" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="10" />
+  </joint>
+</robot> -->

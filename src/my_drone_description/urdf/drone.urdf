@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! -->
+<!-- Modified for Gazebo compatibility -->
+<robot name="my_drone">
+  <!-- 添加基础参数 -->
+  <material name="red_plastic">
+    <color rgba="1.0 0.0 0.0 1.0"/>
+  </material>
+  
+  <material name="blue_plastic">
+    <color rgba="0.79216 0.81961 0.93333 1.0"/>
+  </material>
+  
+  <!-- 基础链接 -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0.0055704807018409 -0.00244991967294366 -0.0185497134505628" rpy="0 0 0" />
+      <!-- 这里修改质量（单位：千克） -->
+      <mass value="0.5" />
+      <!-- 这里修改转动惯量（影响物理行为） -->
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001" />
+    </inertial>
+    
+    <visual>
+      <!-- 这里修改视觉模型位置和旋转（相对于link坐标系） -->
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <!-- 这里修改缩放比例：xyz三个方向的缩放 -->
+        <!-- 原值0.001太小，改为0.1（放大100倍）或1.0（放大1000倍） -->
+        <mesh filename="file:///home/user-888/dh_robot_ws/src/my_drone_description/meshes/base_link.STL" scale="10 10 10" />
+      </geometry>
+      <material name="red_plastic" />
+    </visual>
+    
+    <collision>
+      <!-- 这里修改碰撞体位置和旋转 -->
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <!-- 这里修改碰撞体大小（单位：米） -->
+        <box size="0.1 0.1 0.1" />
+      </geometry>
+    </collision>
+  </link>
+  
+  <!-- 第一个连接臂 -->
+  <link name="link0">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
+    </inertial>
+    
+    <visual>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <!-- 这里修改缩放比例 -->
+        <mesh filename="file:///home/user-888/dh_robot_ws/src/my_drone_description/meshes/link0.STL" scale="10 10 10" />
+      </geometry>
+      <material name="blue_plastic" />
+    </visual>
+    
+    <collision>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <!-- 这里修改圆柱碰撞体尺寸 -->
+        <cylinder length="0.2" radius="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  
+  <!-- 这里修改关节位置（子link相对于父link的位置） -->
+  <joint name="joint0" type="revolute">
+    <origin xyz="0.1 0 0.05" rpy="-1.5708 0 0" />
+    <parent link="base_link" />
+    <child link="link0" />
+    <axis xyz="0 1 0" />
+    <!-- 这里修改关节运动限制 -->
+    <limit lower="-1.57" upper="1.57" effort="10.0" velocity="3.0" />
+    <dynamics damping="0.7" friction="0.0" />
+  </joint>
+  
+  <!-- 第二个连接臂 -->
+  <link name="link1">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
+    </inertial>
+    
+    <visual>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <mesh filename="file:///home/user-888/dh_robot_ws/src/my_drone_description/meshes/link1.STL" scale="10 10 10" />
+      </geometry>
+      <material name="blue_plastic" />
+    </visual>
+    
+    <collision>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <cylinder length="0.2" radius="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="joint1" type="revolute">
+    <origin xyz="0 0 -0.1" rpy="-1.5708 0 0" />
+    <parent link="link0" />
+    <child link="link1" />
+    <axis xyz="0 1 0" />
+    <limit lower="-1.57" upper="1.57" effort="10.0" velocity="3.0" />
+    <dynamics damping="0.7" friction="0.0" />
+  </joint>
+  
+  <!-- 第三个连接臂 -->
+  <link name="link2">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
+    </inertial>
+    
+    <visual>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <mesh filename="file:///home/user-888/dh_robot_ws/src/my_drone_description/meshes/link2.STL" scale="10 10 10" />
+      </geometry>
+      <material name="blue_plastic" />
+    </visual>
+    
+    <collision>
+      <origin xyz="0 0 1" rpy="0 0 1" />
+      <geometry>
+        <cylinder length="0.2" radius="0.01" />
+      </geometry>
+    </collision>
+  </link>
+  
+  <joint name="joint2" type="revolute">
+    <origin xyz="0 0 -0.1" rpy="-1.5708 0 0" />
+    <parent link="link1" />
+    <child link="link2" />
+    <axis xyz="0 1 0" />
+    <limit lower="-1.57" upper="1.57" effort="10.0" velocity="3.0" />
+    <dynamics damping="0.7" friction="0.0" />
+  </joint>
+  
+  <!-- Gazebo扩展配置 -->
+  <gazebo reference="base_link">
+    <!-- 这里修改Gazebo材质 -->
+    <material>Gazebo/Red</material>
+    <!-- 这里修改是否受重力影响 -->
+    <turnGravityOff>false</turnGravityOff>
+    <!-- 这里修改透明度（0.0=不透明，1.0=完全透明） -->
+    <transparency>0.0</transparency>
+  </gazebo>
+  
+  <gazebo reference="link0">
+    <material>Gazebo/Blue</material>
+    <transparency>0.0</transparency>
+  </gazebo>
+  
+  <gazebo reference="link1">
+    <material>Gazebo/Blue</material>
+    <transparency>0.0</transparency>
+  </gazebo>
+  
+  <gazebo reference="link2">
+    <material>Gazebo/Blue</material>
+    <transparency>0.0</transparency>
+  </gazebo>
+</robot>

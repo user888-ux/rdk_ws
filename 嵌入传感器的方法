@@ -1,0 +1,67 @@
+# 以激光雷达为例
+
+#1.在urdf下创建plugins文件夹
+
+#2.复制对应传感器的固定配置，写入plugins下新建的文件gazebo_sensor_plugin.urdf.xacro，包在<xacro:macro name="gazebo_sensor_plugin">里面
+        <gazebo reference="laser_link">
+            <sensor name="laserscan" type="ray"><!--雷达，类型是激光-->
+                <plugin name="laserscan" filename="libgazebo_ros_ray_sensor.so"><!--这个库将下面的参数解析到gazebo中-->
+                    <ros>
+                        <namespace>/</namespace>
+                        <remapping>~/out:=scan</remapping><!--重映射话题的名字-->
+                    </ros>
+                    <output_type>sensor_msgs/LaserScan</output_type><!--输出的消息类型为LaserScan-->
+                    <frame_name>laser_link</frame_name><!--输出消息时的参考坐标系-->
+                </plugin>
+                <always_on>true</always_on>
+                <visualize>true</visualize><!--激光是否可视化-->
+                <update_rate>5</update_rate>
+                <pose>0 0 0 0 0 0</pose><!--传感器的位置-->
+								<!-- 激光传感器配置 -->
+                <ray>
+                    <!-- 设置扫描范围 -->
+                    <scan>
+                        <horizontal>
+                            <samples>360</samples><!--采样数-->
+                            <resolution>1.000000</resolution><!--分辨率-->
+                            <min_angle>0.000000</min_angle><!--最小角-->
+                            <max_angle>6.280000</max_angle><!--最大角-->
+                        </horizontal>
+                    </scan>
+                    <!-- 设置扫描距离 -->
+                    <range>
+                        <min>0.120000</min>
+                        <max>8.0</max>
+                        <resolution>0.015000</resolution>
+                    </range>
+                    <!-- 设置噪声 -->
+                    <noise>
+                        <type>gaussian</type><!--高斯噪声-->
+                        <mean>0.0</mean>
+                        <stddev>0.01</stddev>
+                    </noise>
+                </ray>
+            </sensor>
+        </gazebo>
+
+#3.在要在gazebo中显示的urdf.xacro声明，在<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="first_robot">内声明
+    <xacro:macro name="base_link" params="length radius">
+        <link name="base_link">
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0" />
+                <geometry>
+                    <cylinder length="${length}" radius="${length}" />
+                </geometry>
+                <material name="blue">
+                    <color rgba="0.1 0.1 1.0 0.5" />
+                </material>
+            </visual>
+        </link>
+    </xacro:macro>
+
+#4.运行launch在gazebo中查看效果
+
+#5.也可以用rviz2查看，但是要在fixed_frame选base_link,然后选择话题（激光雷达叫/scan）
+
+#6.还可以在终端@这个话题来获取数据：
+ros2 topic echo /scan --once

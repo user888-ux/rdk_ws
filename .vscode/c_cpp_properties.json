@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include/**",
+                "/opt/ros/humble/include/**",
+                "/usr/lib/x86_64-linux-gnu/qt5/**",
+                "/opt/ros/humble/include/rclcpp"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "/usr/include/**"
+            ]
+        }
+    ],
+    "version": 4
+}
