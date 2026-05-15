@@ -1,19 +1,18 @@
 {
     "configurations": [
         {
-            "name": "Linux",
+            "name": "linux-gcc-arm64",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/include/**",
-                "/opt/ros/humble/include/**",
-                "/usr/lib/x86_64-linux-gnu/qt5/**",
-                "/opt/ros/humble/include/rclcpp"
+                "/opt/ros/humble/include/**"
+                // "/opt/tros/humble/include/**"
             ],
             "defines": [],
+            // "compilerPath": "/usr/bin/aarch64-linux-gnu-gcc",
             "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c17",
-            "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "${default}",
+            "cppStandard": "${default}",
+            "intelliSenseMode": "linux-gcc-arm64",
             "compilerArgs": [
                 "/usr/include/**"
             ]

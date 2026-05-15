@@ -12,55 +12,34 @@
 #include <string>
 #include <vector>
 //自己写的库
-#include "dh_robot_pkg/robot_model.hpp"
 #include "dh_robot_pkg/serial_communicator.hpp"
 #include "dh_robot_pkg/dh_kinematics.hpp"
 
-namespace dh_robot_pkg {
-
 class RobotController : public rclcpp::Node {
 public:
-    RobotController();  // 移除NodeOptions参数
-    
+    RobotController();
+    ~RobotController() = default;
+
 private:
-    //通信回调
-    void updateRobotPoseAndTF(const std::vector<double>& joint_angles, const builtin_interfaces::msg::Time& stamp);
-    void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg);
-    rcl_interfaces::msg::SetParametersResult parametersCallback(
-    const std::vector<rclcpp::Parameter>& params);
-    //TF函数及其辅助函数
-    void publishAllJointTransforms(const std::vector<double>& joint_angles, const builtin_interfaces::msg::Time& stamp);
-    void publishSingleTFTransform(const KDL::Frame& transform, 
-                                              const builtin_interfaces::msg::Time& stamp,
-                                              const std::string& parent_frame,
-                                              const std::string& child_frame) ;
-    // 串口通信相关方法
-    void setupSerialCommunication(const std::string& port, int baudrate);
-    void handleSerialData(const std::string& data);
-
     // 串口通信器
-    SerialCommunicator serial_communicator_;
+    std::unique_ptr<SerialCommunicator> serial_;
 
-    // TF广播器
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;  
-        
-    // 运动学模型
-    std::shared_ptr<RobotModel> robot_model_;
+    // 接收数据累积缓冲区
+    std::vector<uint8_t> rx_buffer_;
 
-    //自己在终端手动设置参数时的设置回调函数的设置器
-    OnSetParametersCallbackHandle::SharedPtr param_sub_;
-    
-    // ROS2相关
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_pub_;
+    // VOFA+ 帧格式常量
+    static constexpr size_t FRAME_SIZE = 8;               // AA 01 04 %% 0D
+    static constexpr uint32_t FRAME_TAIL = 0x7F800000;     // 正无穷浮点数的十六进制表示
 
-    // 参数
-    std::string robot_type_;
-    bool publish_tf_;
+    // 回调：处理接收到的原始字节流
+    void onSerialData(const uint8_t* data, size_t len);
 
-    double joint1_pos_;
-    double joint2_pos_;
-    double joint3_pos_;
+    // 解析累积缓冲区中的完整帧
+    void parseFrames();
+
+    // 处理一帧有效数据（pitch, yaw）
+    void processFrame(const std::vector<float>& values);
+
+    // 发送响应帧（解算后的两个角度）
+    void sendResponse(float new_pitch, float new_yaw);
 };
-
-} // namespace dh_robot_pkg

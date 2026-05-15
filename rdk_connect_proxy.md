@@ -12,4 +12,5 @@ docker run -it --net=host \
   e42755fdcb63
 
 测试：
+curl -v -x http://localhost:7899 google.com
 curl -v http://www.google.com

@@ -233,7 +233,6 @@ find_package(yaml-cpp REQUIRED)
 # 创建可执行文件
 add_executable(dh_robot_node
   src/dh_kinematics.cpp
-  src/robot_model.cpp
   src/robot_controller.cpp
   src/main_node.cpp
   src/serial_communicator.cpp

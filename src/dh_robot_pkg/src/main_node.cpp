@@ -5,7 +5,7 @@ int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     
     // 直接创建节点实例，而不是使用组件
-    auto node = std::make_shared<dh_robot_pkg::RobotController>();
+    auto node = std::make_shared<RobotController>();
     
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node);

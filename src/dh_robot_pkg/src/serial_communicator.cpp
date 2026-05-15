@@ -57,21 +57,22 @@ void SerialCommunicator::disconnect() {
     }
 }
 
-//向STM32发送数据(暂未启用)
-bool SerialCommunicator::send(const std::string& data) {
+bool SerialCommunicator::send(const uint8_t* data, size_t size) {
     if (!isConnected()) {
-        RCLCPP_WARN(node_->get_logger(), "Cannot send data: serial port not connected");
+        RCLCPP_WARN(node_->get_logger(), "Cannot send: port not connected");
         return false;
     }
-    
     try {
-        size_t bytes_written = serial_port_->write_some(boost::asio::buffer(data));
-        RCLCPP_DEBUG(node_->get_logger(), "Sent %zu bytes to serial", bytes_written);
-        return bytes_written == data.size();
+        size_t written = boost::asio::write(*serial_port_, boost::asio::buffer(data, size));
+        return written == size;
     } catch (const std::exception& e) {
-        RCLCPP_ERROR(node_->get_logger(), "Error sending data to serial: %s", e.what());
+        RCLCPP_ERROR(node_->get_logger(), "Send error: %s", e.what());
         return false;
     }
+}
+
+bool SerialCommunicator::send(const std::vector<uint8_t>& data) {
+    return send(data.data(), data.size());
 }
 
 //startAsyncRead()和 handleRead()的相互调用称为 "链式异步读取" 的设计模式(类似于回调设计)，
@@ -90,19 +91,37 @@ void SerialCommunicator::startAsyncRead() {
 
 void SerialCommunicator::handleRead(const boost::system::error_code& error, size_t bytes_transferred) {
     if (!error && bytes_transferred > 0) {
-        std::string received_data(read_buffer_.data(), bytes_transferred);//数据转换：将缓冲区中的原始字节数据转换为字符串
-        RCLCPP_DEBUG(node_->get_logger(), "Received %zu bytes from serial: %s", 
-                    bytes_transferred, received_data.c_str());
-        
-        if (receive_callback_) {//调用(在 robot_controller.cpp)通过 setReceiveCallback(在.hpp文件里) 注册的回调函数
-            receive_callback_(received_data);
+        //  触发二进制回调（如果已设置）
+        if (binary_callback_) {
+            binary_callback_(reinterpret_cast<const uint8_t*>(read_buffer_.data()), bytes_transferred);
         }
+        // 日志（可保留，但二进制数据打印字符串可能乱码，建议仅打印长度）
+        RCLCPP_DEBUG(node_->get_logger(), "Received %zu bytes from serial", bytes_transferred);
     } else if (error) {
         RCLCPP_ERROR(node_->get_logger(), "Serial read error: %s", error.message().c_str());
     }
     
-    // 即使是错误，只要连接还在就继续读取
+    // 继续读取
     if (isConnected()) {
-        startAsyncRead();// 重新注册，等待下一批数据
+        startAsyncRead();
     }
+}
+
+bool SerialCommunicator::sendBinary(const uint8_t* data, size_t size) {
+    if (!isConnected()) {
+        RCLCPP_WARN(node_->get_logger(), "Cannot send binary data: serial port not connected");
+        return false;
+    }
+    try {
+        // 使用同步写入，确保数据完整发送
+        size_t written = boost::asio::write(*serial_port_, boost::asio::buffer(data, size));
+        return written == size;
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR(node_->get_logger(), "Error sending binary data: %s", e.what());
+        return false;
+    }
+}
+
+bool SerialCommunicator::sendBinary(const std::vector<uint8_t>& data) {
+    return sendBinary(data.data(), data.size());
 }

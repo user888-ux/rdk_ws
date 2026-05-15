@@ -37,6 +37,8 @@
  * serial.connect("/dev/ttyUSB0", 115200);
  * serial.send("Hello STM32\n");
  */
+using BinaryReceiveCallback = std::function<void(const uint8_t* data, size_t length)>;
+
 class SerialCommunicator {
 public:
     /// @brief 数据接收回调函数类型定义
@@ -75,28 +77,22 @@ public:
      */
     void disconnect();
     
-    /**
-     * @brief 发送数据到串口
-     * @param data 要发送的字符串数据
-     * @return true-发送成功, false-发送失败（未连接或写入错误）
-     * @note 同步操作，会阻塞直到数据写入完成或超时
-     * @warning 数据中应包含必要的分隔符（如换行符）
-     */
-    bool send(const std::string& data);
+    // 发送二进制数据
+    bool send(const uint8_t* data, size_t size);
+    bool send(const std::vector<uint8_t>& data);
     
     /**
      * @brief 检查串口连接状态
      * @return true-已连接, false-未连接
      */
     bool isConnected() const { return serial_port_ && serial_port_->is_open(); }
-    
-    /**
-     * @brief 设置数据接收回调函数
-     * @param callback 接收回调函数，当串口收到数据时调用
-     * @note 回调函数在io_service线程中执行，不要执行耗时操作
-     * @warning 必须在connect()之前设置回调函数
-     */
-    void setReceiveCallback(ReceiveCallback callback) { receive_callback_ = callback; }
+
+    // 新增：设置二进制接收回调
+    void setBinaryCallback(BinaryReceiveCallback callback){binary_callback_ = std::move(callback);}
+    // 新增：发送二进制数据
+    bool sendBinary(const uint8_t* data, size_t size);
+    // 便捷重载
+    bool sendBinary(const std::vector<uint8_t>& data);
     
 private:
     /**
@@ -120,6 +116,7 @@ private:
     std::thread io_thread_;                             ///< IO服务运行线程
     std::array<char, 1024> read_buffer_;                ///< 数据读取缓冲区
     ReceiveCallback receive_callback_;                  ///< 数据接收回调函数
+    BinaryReceiveCallback binary_callback_;             ///< 二进制回调函数对象
 };
 
 // 编码规范提示：

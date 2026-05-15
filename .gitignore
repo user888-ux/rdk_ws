@@ -2,3 +2,14 @@ build/
 install/
 log/
 *.log
+嵌入传感器的方法.txt
+connect_proxies.md
+dustbin.txt
+rdk_connect_proxy.md
+rebuild.sh
+TEST
+test_gazebo_ros.sh
+test_gazebo.sh
+TEST_with_RViz.md
+TEST_with_serial.md
+TEST.md

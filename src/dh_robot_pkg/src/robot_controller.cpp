@@ -3,278 +3,127 @@
 #include "dh_robot_pkg/dh_kinematics.hpp"
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
+#include "dh_robot_pkg/robot_controller.hpp"
 
-//这代码干了5件事
-// 订阅关节状态信息
-// 计算机器人正向运动学
-// 发布末端执行器位姿,TF位姿并在RViz显示
-// 完成与串口的通信
-// 接收修改的参数并完成二次计算和发布
+//接收->放入缓冲区->判断数据是否有效->是：解算->发布
+//                             ->否：不断丢弃头帧
 
-namespace dh_robot_pkg {
-
-RobotController::RobotController() 
-    //所有在 .hpp定义的都要初始化（血泪教训，否则它能编译但会出 bug）
-    : Node("robot_controller"),serial_communicator_(this),
-    tf_broadcaster_(std::make_shared<tf2_ros::TransformBroadcaster>(this)),
-    robot_model_ (std::make_shared<RobotModel>())
-    {
+RobotController::RobotController()
+    : Node("robot_controller") {
     
-    // 参数声明
-    this->declare_parameter<std::string>("robot_type", "scara");
-    this->declare_parameter<bool>("publish_tf", false);
-    this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
-    this->declare_parameter<int>("serial_baudrate", 115200);
-    // 方便实时在终端更新参数
-    this->declare_parameter<double>("joint1_position", 0.0);
-    this->declare_parameter<double>("joint2_position", 0.0);
-    this->declare_parameter<double>("joint3_position", 0.0);
-
-    // 添加参数回调
-    param_sub_ = this->add_on_set_parameters_callback(
-        [this](const std::vector<rclcpp::Parameter>& params) {
-            return this->parametersCallback(params);
+    // 创建串口通信器
+    serial_ = std::make_unique<SerialCommunicator>(this);
+    
+    // 设置二进制数据回调
+    serial_->setBinaryCallback(
+        [this](const uint8_t* data, size_t len) {
+            this->onSerialData(data, len);
         });
     
-    // 获取参数
-    robot_type_ = this->get_parameter("robot_type").as_string();
-    publish_tf_ = this->get_parameter("publish_tf").as_bool();
-    std::string serial_port = this->get_parameter("serial_port").as_string();
-    int baudrate = this->get_parameter("serial_baudrate").as_int();
-
-    //参数可以在启动时动态设置：
-    //ros2 run dh_robot_pkg robot_controller --ros-args -p robot_type:=articulated
-    
-    // 根据类型设置机器人模型
-    if (robot_type_ == "scara") {
-        robot_model_->setupSCARAModel();
-        RCLCPP_INFO(get_logger(), "Using SCARA robot model");
-    } else if (robot_type_ == "articulated") {
-        robot_model_->setupArticulatedModel();
-        RCLCPP_INFO(get_logger(), "Using Articulated robot model");
-    } else {
-        robot_model_->setupSCARAModel();
-        RCLCPP_INFO(get_logger(), "Using default SCARA robot model");
-    }
-    
-    // 建立与串口的通信
-    setupSerialCommunication(serial_port, baudrate);
-
-    // 通信设置：
-    // 创建订阅者
-    joint_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
-        "joint_states", 10,//订阅话题 "joint_states"(关节状态),队列大小为 10
-        std::bind(&RobotController::jointStateCallback, this, std::placeholders::_1));
-    
-    // 创建发布者
-    pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-        "end_effector_pose", 10);//发布话题 "end_effector_pose"(末端位姿),队列大小为 10
-    
-    RCLCPP_INFO(get_logger(), "Robot controller initialized successfully");
-}
-
-//建立与串口的通信
-void RobotController::setupSerialCommunication(const std::string& port, int baudrate) {
-    // 设置串口接收回调
-    serial_communicator_.setReceiveCallback(
-        [this](const std::string& data) {
-            this->handleSerialData(data);
-        }
-    );
-    
-    // 连接串口
-    if (serial_communicator_.connect(port, baudrate)) {
-        RCLCPP_INFO(get_logger(), "Serial communication established");
-    } else {
-        RCLCPP_WARN(get_logger(), "Failed to establish serial communication");
+    // 连接串口（请根据实际设备名和波特率修改）
+    const std::string port = "/dev/pts/5";
+    const unsigned int baud = 115200;
+    if (!serial_->connect(port, baud)) {
+        RCLCPP_ERROR(get_logger(), "Failed to open serial port %s", port.c_str());
+        rclcpp::shutdown();
     }
 }
 
-void RobotController::handleSerialData(const std::string& data) {
-    try {
-        // 解析从STM32接收到的关节数据
-        // 假设数据格式为: "joint1,joint2,joint3"
-        std::vector<double> joint_positions;
-        std::stringstream ss(data);
-        std::string token;
+void RobotController::onSerialData(const uint8_t* data, size_t len) {
+    // 追加数据到累积缓冲区。insert对于多字节比push_back()更高效
+    rx_buffer_.insert(rx_buffer_.end(), data, data + len);
+    
+    // 尝试解析完整帧
+    parseFrames();
+}
+
+void RobotController::parseFrames() {
+    // 帧尾特征序列
+    static const uint8_t TAIL_SEQ[4] = {0x00, 0x00, 0x80, 0x7f};
+    
+    while (rx_buffer_.size() >= 4) {
+        // 在缓冲区中搜索帧尾
+        auto tail_pos = std::search(rx_buffer_.begin(), rx_buffer_.end(),
+                                    TAIL_SEQ, TAIL_SEQ + 4);
         
-        while (std::getline(ss, token, ',')) {
-            joint_positions.push_back(std::stod(token));
+        if (tail_pos == rx_buffer_.end()) {
+            // 没找到帧尾，保留最后3个字节（防止帧尾跨包）
+            size_t keep = std::min(rx_buffer_.size(), size_t(3));
+            rx_buffer_.erase(rx_buffer_.begin(), rx_buffer_.end() - keep);
+            break;
         }
         
-        if (joint_positions.size() >= 3) {
-            // 创建JointState消息并发布
-            auto joint_msg = std::make_unique<sensor_msgs::msg::JointState>();
-            joint_msg->header.stamp = this->now();
-            joint_msg->header.frame_id = "base_link";
-            joint_msg->name = {"joint1", "joint2", "joint3"};
-            joint_msg->position = joint_positions;
-            joint_msg->velocity = {0.0, 0.0, 0.0};
-            joint_msg->effort = {0.0, 0.0, 0.0};
+        // 帧尾位置到开头的距离 = 浮点数据总字节数
+        size_t data_bytes = std::distance(rx_buffer_.begin(), tail_pos);
+        
+        // 必须是4的倍数（每个float占4字节）
+        if (data_bytes % 4 == 0) {
+            // 有效帧
+            size_t float_count = data_bytes / 4;
+            std::vector<float> values(float_count);
+            std::memcpy(values.data(), rx_buffer_.data(), data_bytes);
             
-            // 调用关节状态回调函数来处理
-            jointStateCallback(std::move(joint_msg));
+            // 处理这一帧的数据
+            processFrame(values);
             
-            RCLCPP_DEBUG(get_logger(), "Processed joint data from serial: %s", data.c_str());
+            // 删除已处理的数据 + 帧尾
+            rx_buffer_.erase(rx_buffer_.begin(), tail_pos + 4);
+        } else {
+            // 字节数不对，丢弃1字节重新搜索
+            rx_buffer_.erase(rx_buffer_.begin());
         }
-    } catch (const std::exception& e) {
-        RCLCPP_WARN(get_logger(), "Failed to parse serial data: %s", data.c_str());
     }
 }
 
-//jointStateCallback和 parametersCallback都会用到该函数
-void RobotController::updateRobotPoseAndTF(const std::vector<double>& joint_angles, const builtin_interfaces::msg::Time& stamp) {
-    try {
-        auto kinematics = robot_model_->getKinematics();
-        if (!kinematics) {
-            RCLCPP_ERROR(get_logger(), "Kinematics not available");
-            return;
-        }
-        
-        // 1. 计算正向运动学
-        KDL::Frame end_effector = kinematics->forwardKinematics(joint_angles);
-        
-        // 2. 发布末端执行器位姿
-        auto pose_msg = std::make_unique<geometry_msgs::msg::PoseStamped>();
-        pose_msg->header.stamp = stamp;
-        pose_msg->header.frame_id = "base_link";
-        
-        pose_msg->pose.position.x = end_effector.p.x();
-        pose_msg->pose.position.y = end_effector.p.y();
-        pose_msg->pose.position.z = end_effector.p.z();
+void RobotController::processFrame(const std::vector<float>& values) {
+    if (values.size() < 2) {
+        RCLCPP_WARN(get_logger(), "Frame too short, expected at least 2 values");
+        return;
+    }
+    
+    float pitch = values[0];
+    float yaw   = values[1];
+    RCLCPP_INFO(get_logger(), "Successfully receive data:pitch=%f,yaw=%f",pitch,yaw);
 
-        double x, y, z, w;
-        end_effector.M.GetQuaternion(x, y, z, w);
-        pose_msg->pose.orientation.x = x;
-        pose_msg->pose.orientation.y = y;
-        pose_msg->pose.orientation.z = z;
-        pose_msg->pose.orientation.w = w;
-        pose_pub_->publish(std::move(pose_msg));
+    
+    // 你原来的解算逻辑保持不变
+    // ...
+    float new_pitch=0;
+    float new_yaw=0;
+    
+    // 发送响应时，如果通道数不变，继续发2个浮点数即可
+    sendResponse(new_pitch, new_yaw);
+}
 
-        // 3. 发布所有关节的TF变换
-        publishAllJointTransforms(joint_angles, stamp);
+void RobotController::sendResponse(float new_pitch, float new_yaw) {
+    std::vector<uint8_t> combined_frame;
 
-        RCLCPP_DEBUG(get_logger(), "Updated robot pose and TF from joint angles");
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(get_logger(), "Error in updateRobotPoseAndTF: %s", e.what());
+    // 1. 添加 yaw 帧头、标识、长度
+    combined_frame.push_back(0xAA);
+    combined_frame.push_back(0x01);
+    combined_frame.push_back(0x04);
+
+    // 添加 yaw 浮点数 4 字节（保持原内存顺序）
+    uint8_t* yaw_bytes = reinterpret_cast<uint8_t*>(&new_yaw);
+    combined_frame.insert(combined_frame.end(), yaw_bytes, yaw_bytes + 4);
+
+    // 添加 yaw 帧尾
+    combined_frame.push_back(0x0D);
+
+    // 2. 添加 pitch 帧头、标识、长度
+    combined_frame.push_back(0xAA);
+    combined_frame.push_back(0x02);
+    combined_frame.push_back(0x04);
+
+    // 添加 pitch 浮点数 4 字节
+    uint8_t* pitch_bytes = reinterpret_cast<uint8_t*>(&new_pitch);
+    combined_frame.insert(combined_frame.end(), pitch_bytes, pitch_bytes + 4);
+
+    // 添加 pitch 帧尾
+    combined_frame.push_back(0x0D);
+
+    // 一次性发送合并后的完整数据包
+    if (!serial_->send(combined_frame)) {
+        RCLCPP_WARN(get_logger(), "Failed to send combined yaw/pitch response frame");
     }
 }
-
-//订阅者的回调函数
-void RobotController::jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr msg) {
-    try {
-        if (msg->position.empty()) {
-            RCLCPP_WARN(get_logger(), "Received empty joint state message");
-            return;
-        }
-
-        // 直接调用公共函数，传入消息中的关节角度和时间戳
-        updateRobotPoseAndTF(msg->position, msg->header.stamp);
-
-        // 将计算得到的位姿发送回STM32(暂未启用)
-        // std::stringstream pose_data;
-        // pose_data << std::fixed << std::setprecision(6);
-        // pose_data << end_effector.p.x() << "," 
-        //          << end_effector.p.y() << "," 
-        //          << end_effector.p.z() << ","
-        //          << x << "," << y << "," << z << "," << w << "\n";
-        
-        // serial_communicator_.send(pose_data.str());
-        
-        RCLCPP_DEBUG(get_logger(), "Published end effector pose");
-        
-    } catch (const std::exception& e) {
-        RCLCPP_ERROR(get_logger(), "Error in joint state callback: %s", e.what());
-    }
-}
-
-// 设置参数的回调函数
-rcl_interfaces::msg::SetParametersResult RobotController::parametersCallback(
-    const std::vector<rclcpp::Parameter>& params) {
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    result.reason = "参数更新成功";
-
-    for (const auto& param : params) {
-        if (param.get_name() == "joint1_position") joint1_pos_ = param.as_double();
-        else if (param.get_name() == "joint2_position") joint2_pos_ = param.as_double();
-        else if (param.get_name() == "joint3_position") joint3_pos_ = param.as_double();
-        else if (param.get_name() == "publish_tf") publish_tf_ = param.as_bool();
-    }
-
-    // 调用公共函数，传入成员变量的关节角度和当前节点时间
-    std::vector<double> joint_angles = {joint1_pos_, joint2_pos_, joint3_pos_};
-    updateRobotPoseAndTF(joint_angles, this->now());
-
-    return result;
-}
-
-//发布 TF 数据给 RViz 可视化
-void RobotController::publishAllJointTransforms(const std::vector<double>& joint_angles, 
-                                               const builtin_interfaces::msg::Time& stamp) {
-    //初始化数学库的计算器，通过它来调用数学库里的函数
-    auto kinematics = robot_model_->getKinematics();
-    if (!kinematics) return;
-    
-    // 对于SCARA机器人，我们有3个关节+1个末端执行器
-    KDL::Frame current_pose = KDL::Frame::Identity();
-    
-    // 获取D-H参数
-    auto dh_params = robot_model_->getDHParameters();
-    
-    for (size_t i = 0; i < dh_params.size(); ++i) {
-        double joint_value = (i < joint_angles.size()) ? joint_angles[i] : 0.0;
-        
-        // 计算当前连杆的变换
-        KDL::Frame transform = kinematics->calculateDHTransform(dh_params[i], joint_value);
-        current_pose = current_pose * transform;
-        
-        // 发布当前关节的TF
-        std::string parent_frame, child_frame;
-        
-        if (i == 0) {
-            parent_frame = "base_link";
-            child_frame = "joint1_link";
-        } else if (i == 1) {
-            parent_frame = "joint1_link";
-            child_frame = "joint2_link";
-        } else if (i == 2) {
-            parent_frame = "joint2_link";
-            child_frame = "joint3_link";
-        } else if (i == 3) {
-            parent_frame = "joint3_link";
-            child_frame = "end_effector_link";
-        }
-        
-        publishSingleTFTransform(current_pose, stamp, parent_frame, child_frame);
-    }
-}
-
-// 发布单个TF变换的辅助函数
-void RobotController::publishSingleTFTransform(const KDL::Frame& transform, 
-                                              const builtin_interfaces::msg::Time& stamp,
-                                              const std::string& parent_frame,
-                                              const std::string& child_frame) {
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    
-    transform_stamped.header.stamp = stamp;
-    transform_stamped.header.frame_id = parent_frame;
-    transform_stamped.child_frame_id = child_frame;
-    
-    transform_stamped.transform.translation.x = transform.p.x();
-    transform_stamped.transform.translation.y = transform.p.y();
-    transform_stamped.transform.translation.z = transform.p.z();
-    
-    double x, y, z, w;
-    transform.M.GetQuaternion(x, y, z, w);
-    transform_stamped.transform.rotation.x = x;
-    transform_stamped.transform.rotation.y = y;
-    transform_stamped.transform.rotation.z = z;
-    transform_stamped.transform.rotation.w = w;
-    
-    tf_broadcaster_->sendTransform(transform_stamped);
-}
-
-} // namespace dh_robot_pkg
-
-// 移除组件注册，使用标准main函数
