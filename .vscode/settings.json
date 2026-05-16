@@ -139,5 +139,17 @@
   "C_Cpp_Runner.useLeakSanitizer": false,
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
-  "C_Cpp_Runner.msvcSecureNoWarnings": false
+  "C_Cpp_Runner.msvcSecureNoWarnings": false,
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/install/**": true,
+    "**/log/**": true,
+    "**/.git/**": true
+  },
+  "C_Cpp.intelliSenseCacheSize": 512,
+  "search.exclude": {
+    "**/build": true,
+    "**/install": true,
+    "**/log": true
+  }
 }

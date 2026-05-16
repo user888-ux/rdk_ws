@@ -64,6 +64,7 @@ YOLOv5Detector::~YOLOv5Detector() {
 }
 
 void YOLOv5Detector::submitImage(const cv::Mat& nv12_image, int image_id) {
+    LOG("成功提交图像到任务队列");
     std::unique_lock<std::mutex> lock(mtx_);
     inference_queue_.push({nv12_image.clone(), image_id});
     cv_infer_.notify_one();
@@ -85,6 +86,7 @@ bool YOLOv5Detector::getResult(int image_id, std::vector<cv::Rect2d>& bboxes,
 
 void YOLOv5Detector::inferenceThread() {
     while (!stop_) {
+        LOG("开始推理");
         Task task;
         {
             std::unique_lock<std::mutex> lock(mtx_);
@@ -109,6 +111,7 @@ void YOLOv5Detector::inferenceThread() {
 
 void YOLOv5Detector::postprocessThread() {
     while (!stop_) {
+        LOG("开始后处理");
         Task task;
         {
             std::unique_lock<std::mutex> lock(mtx_);

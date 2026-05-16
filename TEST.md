@@ -1,48 +1,33 @@
-# 测试方法
-cd ~/dh_robot_ws
-colcon build
-source install/setup.sh
+2026.5.16 测试方法：打开6个终端，其中5个依次 source /opt/tros/humble.setup.bash，
+另一个 
+cd rdk_ws 
+source install/setup.bash
+ros2 run camera_detector camera_detector_node
 
-# 以下终端的打开顺序 不能 调换
+剩下5个：
 
-# 终端1：启动节点
-ros2 run dh_robot_pkg dh_robot_node
+ros2 launch hobot_usb_cam hobot_usb_cam.launch.py usb_video_device:=/dev/video8 usb_pixel_format:=yuyv2rgb usb_image_width:=640 usb_image_height:=480
 
-# 终端2：查看末端位姿
-ros2 topic echo /end_effector_pose
+ros2 launch hobot_codec hobot_codec_encode.launch.py codec_in_mode:=ros codec_in_format:=rgb8 codec_out_mode:=ros codec_out_format:=jpeg codec_sub_topic:=/image codec_pub_topic:=/jpeg_img
 
-# 终端3：发布正确的关节状态（3个关节）
-<!-- # sensor_msgs/msg/JointState 这是ROS中用于描述机器人所有关节状态的标准消息类型 -->
-# !!! 发布的参数说明：
-#    sec: 0        # 时间戳（秒）
-#    nanosec: 0    # 时间戳（纳秒）
-# 'base_link' 表示这些关节状态是相对于机器人基座坐标系的
+ros2 launch hobot_codec hobot_codec_encode.launch.py codec_in_mode:=ros codec_in_format:=jpeg codec_out_mode:=ros codec_out_format:=nv12 codec_sub_topic:=/jpeg_img codec_pub_topic:=/nv12_img
 
-# position:
-# joint1: 位置 = 0.5 弧度（约28.65度）
-# joint2: 位置 = 0.3 弧度（约17.19度）
-# joint3: 位置 = -0.05 米（向下的位移）
-# 注意：对于SCARA机器人：
-# 关节1和2是旋转关节 → 单位是弧度
-# 关节3是平移关节 → 单位是米
+ros2 launch hobot_codec hobot_codec_encode.launch.py codec_in_mode:=ros codec_in_format:=bgr8 codec_out_mode:=ros codec_out_format:=jpeg codec_sub_topic:=/detection_img codec_pub_topic:=/detection_jpeg_img
 
-# velocity:
-# 表示每个关节的瞬时速度：
-# 所有关节速度都为0，表示机器人当前静止
-# 单位：旋转关节是弧度/秒，平移关节是米/秒
+ros2 launch websocket websocket.launch.py websocket_image_topic:=/detection_jpeg_img websocket_only_show_image:=true
 
-# effort:
-# 表示每个关节的输出力矩/力：
-# 所有关节力矩都为0
-# 单位：旋转关节是牛顿·米，平移关节是牛顿
-ros2 topic pub /joint_states sensor_msgs/msg/JointState "
-header:
-  stamp:
-    sec: 0
-    nanosec: 0
-  frame_id: 'base_link'
-name: ['joint1', 'joint2', 'joint3']
-position: [0.5, 0.3, -0.05]
-velocity: [0.0, 0.0, 0.0]
-effort: [0.0, 0.0, 0.0]
-" --once
+今天能看到 web上有图像，但是没有识别到东西，可能
+1.第3条命令是这样的：
+[hobot_codec_republish-1] [WARN] [1778943326.858569883] [hobot_codec_encoder_26bcfc89]: Pub img fps [30.06]
+[hobot_codec_republish-1] [WARN] [1778943331.877136255] [hobot_codec_encoder_26bcfc89]: Pub img fps [30.09]
+......
+只有pub没有sub
+但是之前
+ros2 launch hobot_codec hobot_codec_encode.launch.py codec_in_mode:=shared_mem codec_in_format:=jpeg codec_out_mode:=ros codec_out_format:=nv12 codec_sub_topic:=/tmp_img codec_pub_topic:=/hbmem_img
+这是旧命令，它有pub和sub
+[hobot_codec_republish-1] [WARN] [1778941974.568665141] [hobot_codec_encoder_fc055384]: sub jpeg 640x480, fps: 33.4975, pub nv12, fps: 33.4975, comm delay [495.3235]ms, codec delay [2.8824]ms
+[hobot_codec_republish-1] [WARN] [1778941978.460594763] [hobot_codec_encoder_fc055384]: Pub img fps [30.07]
+
+并且[官方教程这个地方](https://developer.d-robotics.cc/rdk_doc/Robot_development/tros_dev/ai_predict#1-%E5%88%9B%E5%BB%BApackage)，虽然是rdkx3，但是用的是hbm_img_msgs::msg::HbmMsg1080P这个消息类型，所以可以尝试改类型为 shared_mem
+
+2.同样是官方教程，它用的是hbm的消息类型，说不定有帮助

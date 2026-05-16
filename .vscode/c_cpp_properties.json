@@ -3,19 +3,20 @@
         {
             "name": "linux-gcc-arm64",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/dh_robot_pkg/include",
+                "${workspaceFolder}/src/camera_detector/include",
                 "/opt/ros/humble/include/**"
-                // "/opt/tros/humble/include/**"
             ],
-            "defines": [],
-            // "compilerPath": "/usr/bin/aarch64-linux-gnu-gcc",
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "${default}",
-            "cppStandard": "${default}",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src/camera_detector",
+                    "${workspaceFolder}/src/dh_robot_pkg"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPath": "/usr/bin/g++",
             "intelliSenseMode": "linux-gcc-arm64",
-            "compilerArgs": [
-                "/usr/include/**"
-            ]
+            "cppStandard": "c++17"
         }
     ],
     "version": 4

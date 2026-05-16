@@ -19,12 +19,11 @@ find_package(sensor_msgs REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
-# 地平线dnn库依赖
-find_package(ai_msgs REQUIRED)
-find_package(hbm_img_msgs REQUIRED)
-find_package(dnn_node REQUIRED)
-find_package(hobot_mot REQUIRED)
+# 地平线dnn库依赖路径定义
+set(DNN_PATH "/usr/include/dnn")       
+set(DNN_LIB_PATH "/usr/lib/")             
 
 # 查找系统依赖
 find_package(orocos_kdl REQUIRED)
@@ -42,6 +41,7 @@ add_executable(camera_detector_node
 target_include_directories(camera_detector_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  $<BUILD_INTERFACE:${DNN_PATH}>
 )
 
 # 使用现代ament方式设置所有依赖
@@ -52,13 +52,33 @@ ament_target_dependencies(camera_detector_node
   cv_bridge
   orocos_kdl
   OpenCV
-  # boost
+  Boost
   yaml-cpp
   # 地平线相关库
-  dnn_node
-  # ai_msgs
-  hobot_mot
-  hbm_img_msgs
+  # dnn_node
+  # # ai_msgs
+  # hobot_mot
+  # hbm_img_msgs
+)
+
+# 新增：链接 dnn 库以及相关的 pthread、rt、dl的搜索路径
+target_link_directories(camera_detector_node PRIVATE
+  ${DNN_LIB_PATH}
+)
+
+target_link_libraries(camera_detector_node ${ament_index_cpp_LIBRARIES})
+
+target_link_libraries(camera_detector_node
+  yaml-cpp
+  dnn           # 地平线 dnn 库
+  pthread
+  rt
+  dl
+)
+
+# 新增：加入官方例程中的链接器标志（避免未定义符号错误
+target_link_options(camera_detector_node PRIVATE
+  "LINKER:-unresolved-symbols=ignore-in-shared-libs"
 )
 
 # 链接非ament包（系统库）
@@ -106,6 +126,14 @@ install(
   PATTERN "*.sh"
   PATTERN "*.bash"
 )
+
+# 安装模型
+install(DIRECTORY models/
+        DESTINATION share/${PROJECT_NAME}/models
+        PATTERN "build" EXCLUDE
+        PATTERN "install" EXCLUDE
+        PATTERN "log" EXCLUDE
+        PATTERN "COLCON_IGNORE" EXCLUDE)
 
 # 导出包含目录信息
 ament_export_include_directories(include)

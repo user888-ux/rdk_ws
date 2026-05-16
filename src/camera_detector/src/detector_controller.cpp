@@ -24,11 +24,11 @@ DetectorController::DetectorController(
     // 订阅NV12图像话题
     // 假设发布者为官方硬件节点，编码格式为 "nv12"
     image_sub_ = create_subscription<sensor_msgs::msg::Image>(
-        "/image", 10,
+        "/nv12_img", 10,
         std::bind(&DetectorController::imageCallback, this, std::placeholders::_1));
 
     // 发布渲染后的BGR图像
-    image_pub_ = create_publisher<sensor_msgs::msg::Image>("/detection_image", 10);
+    image_pub_ = create_publisher<sensor_msgs::msg::Image>("/detection_img", 10);
 
     // 发布检测结果（检测框、类别、分数）
     det_pub_ = create_publisher<vision_msgs::msg::Detection2DArray>("/detections", 10);
@@ -49,6 +49,7 @@ DetectorController::~DetectorController()
 
 void DetectorController::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
+    LOG("触发了图像回调");
     // 将ROS Image消息转为cv::Mat (NV12格式)
     // 注意：NV12是单通道图像，大小为 height * 1.5 × width
     if (msg->encoding != "nv12") {
@@ -77,6 +78,7 @@ void DetectorController::imageCallback(const sensor_msgs::msg::Image::SharedPtr 
         std::lock_guard<std::mutex> lock(map_mutex_);
         bgr_map_[image_id] = bgr_img.clone();
     }
+    LOG("完成回调");
 }
 
 void DetectorController::processResults()
@@ -150,8 +152,9 @@ DetectorController::generateDetectionMsg(
     array_msg.header = header;
     for (size_t i = 0; i < bboxes.size(); i++) {
         vision_msgs::msg::Detection2D det;
-        det.bbox.center.x = bboxes[i].x + bboxes[i].width / 2;
-        det.bbox.center.y = bboxes[i].y + bboxes[i].height / 2;
+        // 通过 Pose2D 的 x, y 字段设置中心点坐标
+        det.bbox.center.position.x = bboxes[i].x + bboxes[i].width / 2.0;
+        det.bbox.center.position.y = bboxes[i].y + bboxes[i].height / 2.0;
         det.bbox.size_x = bboxes[i].width;
         det.bbox.size_y = bboxes[i].height;
         det.results.resize(1);

@@ -9,6 +9,7 @@
 #include <queue>
 #include <opencv2/opencv.hpp>
 #include "dnn/hb_dnn.h"
+#define LOG(msg) std::cout<<msg<<std::endl;
 
 /**
  * @brief 基于地平线BPU的YOLOv5目标检测器，内部使用双线程流水线（推理+后处理）
