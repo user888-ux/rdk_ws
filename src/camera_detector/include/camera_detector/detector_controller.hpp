@@ -7,8 +7,10 @@
 #include <cv_bridge/cv_bridge.h>
 #include "yolov5_detector.hpp"
 #include <opencv2/opencv.hpp>
+// #include "hbm_img_msgs/msg/hbm_msg1080_p.hpp"
 #include <string>
 #include <memory>
+
 #define LOG(msg) std::cout<<msg<<std::endl;
 
 class DetectorController : public rclcpp::Node
@@ -59,7 +61,7 @@ private:
     std::string get_model_path();
 
     // ROS 接口
-    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+    rclcpp::Subscription<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr image_sub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
     rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr det_pub_;
     rclcpp::TimerBase::SharedPtr result_timer_;

@@ -1,3 +1,7 @@
+根据rdk_model_zoo/samples/vision/yolov5/runtime/cpp/main.cc的官方代码重构成**多线程**代码（我更名为one_picture_detect.cpp防止冲突 && 供参考）
+
+### 本包仍在开发中，故本说明未完善
+
 2026.5.16 测试方法：打开6个终端，其中5个依次 source /opt/tros/humble/setup.bash，
 另一个 
 cd rdk_ws 

@@ -7,13 +7,13 @@
                 "${workspaceFolder}/src/camera_detector/include",
                 "/opt/ros/humble/include/**"
             ],
-            "browse": {
-                "path": [
-                    "${workspaceFolder}/src/camera_detector",
-                    "${workspaceFolder}/src/dh_robot_pkg"
-                ],
-                "limitSymbolsToIncludedHeaders": true
-            },
+            // "browse": {
+            //     "path": [
+            //         "${workspaceFolder}/src/camera_detector",
+            //         "${workspaceFolder}/src/dh_robot_pkg"
+            //     ],
+            //     "limitSymbolsToIncludedHeaders": true
+            // },
             "compilerPath": "/usr/bin/g++",
             "intelliSenseMode": "linux-gcc-arm64",
             "cppStandard": "c++17"

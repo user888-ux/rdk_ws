@@ -23,7 +23,7 @@ DetectorController::DetectorController(
 
     // 订阅NV12图像话题
     // 假设发布者为官方硬件节点，编码格式为 "nv12"
-    image_sub_ = create_subscription<sensor_msgs::msg::Image>(
+    image_sub_ = create_subscription<hbm_img_msgs::msg::HbmMsg1080P>(
         "/nv12_img", 10,
         std::bind(&DetectorController::imageCallback, this, std::placeholders::_1));
 
